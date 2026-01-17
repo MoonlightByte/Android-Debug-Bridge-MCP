@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+// Handle invalid CWD early (common in WSL when paths become inaccessible)
+// This must run before any imports that might use process.cwd()
+try {
+  process.cwd();
+} catch (e) {
+  // CWD is invalid, change to home directory or /tmp as fallback
+  const safeDir = process.env.HOME || '/tmp';
+  try {
+    process.chdir(safeDir);
+    console.error(`Warning: CWD was invalid, changed to ${safeDir}`);
+  } catch {
+    // If even that fails, continue anyway - some operations may still work
+    console.error('Warning: Could not set valid working directory');
+  }
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {

@@ -1,6 +1,23 @@
 #!/usr/bin/env node
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// Handle invalid CWD early (common in WSL when paths become inaccessible)
+// This must run before any imports that might use process.cwd()
+try {
+    process.cwd();
+}
+catch (e) {
+    // CWD is invalid, change to home directory or /tmp as fallback
+    const safeDir = process.env.HOME || '/tmp';
+    try {
+        process.chdir(safeDir);
+        console.error(`Warning: CWD was invalid, changed to ${safeDir}`);
+    }
+    catch {
+        // If even that fails, continue anyway - some operations may still work
+        console.error('Warning: Could not set valid working directory');
+    }
+}
 const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");

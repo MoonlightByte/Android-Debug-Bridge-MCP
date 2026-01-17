@@ -148,6 +148,36 @@ adb devices -l
 
 If ADB is not in your PATH, set the `ADB_PATH` environment variable to the full path of your ADB executable.
 
+### WSL: "ENOENT: no such file or directory, uv_cwd"
+
+This error occurs when the working directory becomes invalid, which is common in WSL when Windows paths become inaccessible.
+
+**The server handles this automatically** by detecting invalid CWD and switching to your home directory. However, if you still encounter issues:
+
+**Solution 1:** Create a wrapper script that sets a stable CWD:
+```bash
+#!/bin/bash
+cd ~
+exec npx android-debug-bridge-mcp "$@"
+```
+
+Save as `~/bin/adb-mcp-wrapper`, make executable (`chmod +x`), and use it in your MCP config:
+```json
+{
+  "mcpServers": {
+    "android-debug-bridge": {
+      "command": "/home/youruser/bin/adb-mcp-wrapper"
+    }
+  }
+}
+```
+
+**Solution 2:** Restart WSL completely:
+```bash
+wsl --shutdown
+```
+Then reopen your terminal.
+
 ## License
 
 MIT
