@@ -63,9 +63,10 @@ export const toolHandlers = {
   },
 
   list_apps: async (args: any) => {
-    const { app_name } = args as { app_name: string };    
-    const result = await executeCommand(`adb shell pm list packages | findstr "${app_name}"`);
-    
+    const { app_name } = args as { app_name: string };
+    // Run grep inside adb shell to avoid host-side pipe issues
+    const result = await executeCommand(`adb shell "pm list packages | grep -i '${app_name}'"`);
+
     return {
       content: [
         {
