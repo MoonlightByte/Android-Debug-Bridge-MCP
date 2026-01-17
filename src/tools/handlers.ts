@@ -1,9 +1,14 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import sharp from 'sharp';
 import { executeCommand, createDirectory, getBaseTestPath } from '../utils/shell.js';
 import { sleep } from '../utils/sleep.js';
 import { parseUIAutomatorXML, formatElementsForDisplay } from '../utils/xmlParser.js';
+
+// Screenshot compression settings
+const SCREENSHOT_MAX_WIDTH = 540;
+const SCREENSHOT_JPEG_QUALITY = 60;
 
 const captureUIContent = async (includeRawXML: boolean = true) => {
   await executeCommand('adb shell uiautomator dump /sdcard/window_dump.xml');
@@ -96,34 +101,51 @@ export const toolHandlers = {
   },
 
   capture_screenshot: async (args: any) => {
-    const { test_name, step_name } = args as { 
-      test_name: string; 
-      step_name: string; 
+    const { test_name, step_name } = args as {
+      test_name: string;
+      step_name: string;
     };
-    
+
     const testPath = path.join(getBaseTestPath(), test_name);
     const screenshotPath = path.join(testPath, `${step_name}_step.png`);
-    
+    const compressedPath = path.join(testPath, `${step_name}_step.jpg`);
+
     if (!fs.existsSync(testPath)) {
       fs.mkdirSync(testPath, { recursive: true });
     }
-    
+
     await executeCommand(`adb exec-out screencap -p > "${screenshotPath}"`);
-    
-    // Read the screenshot file and convert to base64
-    const imageData = fs.readFileSync(screenshotPath);
-    const base64Image = imageData.toString('base64');
-    
+
+    // Compress the screenshot using sharp
+    // Resize to max width while maintaining aspect ratio, convert to JPEG
+    const originalSize = fs.statSync(screenshotPath).size;
+
+    const compressedBuffer = await sharp(screenshotPath)
+      .resize(SCREENSHOT_MAX_WIDTH, null, {
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: SCREENSHOT_JPEG_QUALITY })
+      .toBuffer();
+
+    // Save compressed version for reference
+    fs.writeFileSync(compressedPath, compressedBuffer);
+
+    const compressedSize = compressedBuffer.length;
+    const reduction = ((1 - compressedSize / originalSize) * 100).toFixed(1);
+
+    const base64Image = compressedBuffer.toString('base64');
+
     return {
       content: [
         {
           type: 'text',
-          text: `Screenshot captured: ${screenshotPath}`,
+          text: `Screenshot captured: ${screenshotPath}\nCompressed: ${originalSize.toLocaleString()} → ${compressedSize.toLocaleString()} bytes (${reduction}% reduction)`,
         },
         {
           type: 'image',
           data: base64Image,
-          mimeType: 'image/png',
+          mimeType: 'image/jpeg',
         },
       ],
     };

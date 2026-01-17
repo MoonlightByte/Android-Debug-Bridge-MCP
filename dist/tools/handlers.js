@@ -32,14 +32,21 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.toolHandlers = void 0;
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const sharp_1 = __importDefault(require("sharp"));
 const shell_js_1 = require("../utils/shell.js");
 const sleep_js_1 = require("../utils/sleep.js");
 const xmlParser_js_1 = require("../utils/xmlParser.js");
+// Screenshot compression settings
+const SCREENSHOT_MAX_WIDTH = 540;
+const SCREENSHOT_JPEG_QUALITY = 60;
 const captureUIContent = async (includeRawXML = true) => {
     await (0, shell_js_1.executeCommand)('adb shell uiautomator dump /sdcard/window_dump.xml');
     const xmlContent = await (0, shell_js_1.executeCommand)('adb shell "cat /sdcard/window_dump.xml"');
@@ -118,23 +125,36 @@ exports.toolHandlers = {
         const { test_name, step_name } = args;
         const testPath = path.join((0, shell_js_1.getBaseTestPath)(), test_name);
         const screenshotPath = path.join(testPath, `${step_name}_step.png`);
+        const compressedPath = path.join(testPath, `${step_name}_step.jpg`);
         if (!fs.existsSync(testPath)) {
             fs.mkdirSync(testPath, { recursive: true });
         }
         await (0, shell_js_1.executeCommand)(`adb exec-out screencap -p > "${screenshotPath}"`);
-        // Read the screenshot file and convert to base64
-        const imageData = fs.readFileSync(screenshotPath);
-        const base64Image = imageData.toString('base64');
+        // Compress the screenshot using sharp
+        // Resize to max width while maintaining aspect ratio, convert to JPEG
+        const originalSize = fs.statSync(screenshotPath).size;
+        const compressedBuffer = await (0, sharp_1.default)(screenshotPath)
+            .resize(SCREENSHOT_MAX_WIDTH, null, {
+            fit: 'inside',
+            withoutEnlargement: true
+        })
+            .jpeg({ quality: SCREENSHOT_JPEG_QUALITY })
+            .toBuffer();
+        // Save compressed version for reference
+        fs.writeFileSync(compressedPath, compressedBuffer);
+        const compressedSize = compressedBuffer.length;
+        const reduction = ((1 - compressedSize / originalSize) * 100).toFixed(1);
+        const base64Image = compressedBuffer.toString('base64');
         return {
             content: [
                 {
                     type: 'text',
-                    text: `Screenshot captured: ${screenshotPath}`,
+                    text: `Screenshot captured: ${screenshotPath}\nCompressed: ${originalSize.toLocaleString()} → ${compressedSize.toLocaleString()} bytes (${reduction}% reduction)`,
                 },
                 {
                     type: 'image',
                     data: base64Image,
-                    mimeType: 'image/png',
+                    mimeType: 'image/jpeg',
                 },
             ],
         };
