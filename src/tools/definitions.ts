@@ -1,5 +1,13 @@
 export const toolDefinitions = [
   {
+    name: 'list_devices',
+    description: 'List all connected Android devices and emulators',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
     name: 'create_test_folder',
     description: 'Create a test folder with the specified name',
     inputSchema: {
@@ -23,6 +31,10 @@ export const toolDefinitions = [
           type: 'string',
           description: 'Name pattern to search for in app packages',
         },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
+        },
       },
       required: ['app_name'],
     },
@@ -36,6 +48,10 @@ export const toolDefinitions = [
         package_name: {
           type: 'string',
           description: 'Full package name of the app (e.g., com.example.app)',
+        },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
         },
       },
       required: ['package_name'],
@@ -55,6 +71,10 @@ export const toolDefinitions = [
           type: 'string',
           description: 'Name of the step for the screenshot file (e.g., "001_login")',
         },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
+        },
       },
       required: ['test_name', 'step_name'],
     },
@@ -64,7 +84,12 @@ export const toolDefinitions = [
     description: 'Capture UI hierarchy dump from the device',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
+        },
+      },
     },
   },
   {
@@ -77,6 +102,10 @@ export const toolDefinitions = [
           type: 'string',
           enum: ['BACK', 'HOME', 'ENTER', 'DELETE'],
           description: 'Key event to send',
+        },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
         },
       },
       required: ['key'],
@@ -96,6 +125,10 @@ export const toolDefinitions = [
           type: 'number',
           description: 'Y coordinate for tap',
         },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
+        },
       },
       required: ['x', 'y'],
     },
@@ -109,6 +142,10 @@ export const toolDefinitions = [
         text: {
           type: 'string',
           description: 'Text to input',
+        },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
         },
       },
       required: ['text'],
@@ -124,6 +161,10 @@ export const toolDefinitions = [
           type: 'string',
           enum: ['up', 'down', 'left', 'right'],
           description: 'Direction to scroll',
+        },
+        device: {
+          type: 'string',
+          description: 'Target device serial (e.g., emulator-5554). Use list_devices to see available devices.',
         },
       },
       required: ['direction'],
