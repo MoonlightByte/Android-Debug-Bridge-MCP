@@ -2,7 +2,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
-import { executeCommand, createDirectory, getBaseTestPath } from '../utils/shell.js';
+import { executeCommand, createDirectory, getBaseTestPath, getConnectedDevices } from '../utils/shell.js';
 import { sleep } from '../utils/sleep.js';
 import { parseUIAutomatorXML, formatElementsForDisplay } from '../utils/xmlParser.js';
 
@@ -10,9 +10,9 @@ import { parseUIAutomatorXML, formatElementsForDisplay } from '../utils/xmlParse
 const SCREENSHOT_MAX_WIDTH = 540;
 const SCREENSHOT_JPEG_QUALITY = 60;
 
-const captureUIContent = async (includeRawXML: boolean = true) => {
-  await executeCommand('adb shell uiautomator dump /sdcard/window_dump.xml');
-  const xmlContent = await executeCommand('adb shell "cat /sdcard/window_dump.xml"');
+const captureUIContent = async (includeRawXML: boolean = true, device?: string) => {
+  await executeCommand('adb shell uiautomator dump /sdcard/window_dump.xml', device);
+  const xmlContent = await executeCommand('adb shell "cat /sdcard/window_dump.xml"', device);
   
   try {
     const processedUI = await parseUIAutomatorXML(xmlContent);
@@ -51,6 +51,30 @@ const captureUIContent = async (includeRawXML: boolean = true) => {
 };
 
 export const toolHandlers = {
+  list_devices: async (args: any) => {
+    const devices = await getConnectedDevices();
+
+    if (devices.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: 'No Android devices connected. Start an emulator or connect a device via USB.',
+          },
+        ],
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Connected devices:\n${devices.map(d => `  - ${d}`).join('\n')}\n\nUse the 'device' parameter with any tool to target a specific device.`,
+        },
+      ],
+    };
+  },
+
   create_test_folder: async (args: any) => {
     const { test_name } = args as { test_name: string };
     const testPath = path.join(getBaseTestPath(), test_name);
@@ -68,9 +92,9 @@ export const toolHandlers = {
   },
 
   list_apps: async (args: any) => {
-    const { app_name } = args as { app_name: string };
+    const { app_name, device } = args as { app_name: string; device?: string };
     // Run grep inside adb shell to avoid host-side pipe issues
-    const result = await executeCommand(`adb shell "pm list packages | grep -i '${app_name}'"`);
+    const result = await executeCommand(`adb shell "pm list packages | grep -i '${app_name}'"`, device);
 
     return {
       content: [
@@ -83,27 +107,29 @@ export const toolHandlers = {
   },
 
   open_app: async (args: any) => {
-    const { package_name } = args as { 
-      package_name: string; 
+    const { package_name, device } = args as {
+      package_name: string;
+      device?: string;
     };
-    
-    await executeCommand(`adb shell monkey -p ${package_name} 1`);
+
+    await executeCommand(`adb shell monkey -p ${package_name} 1`, device);
     await sleep(5000);
-    
+
     return {
       content: [
         {
           type: 'text',
-          text: `App opened: ${package_name}`,
+          text: `App opened: ${package_name}${device ? ` on ${device}` : ''}`,
         },
       ],
     };
   },
 
   capture_screenshot: async (args: any) => {
-    const { test_name, step_name } = args as {
+    const { test_name, step_name, device } = args as {
       test_name: string;
       step_name: string;
+      device?: string;
     };
 
     const testPath = path.join(getBaseTestPath(), test_name);
@@ -114,7 +140,7 @@ export const toolHandlers = {
       fs.mkdirSync(testPath, { recursive: true });
     }
 
-    await executeCommand(`adb exec-out screencap -p > "${screenshotPath}"`);
+    await executeCommand(`adb exec-out screencap -p > "${screenshotPath}"`, device);
 
     // Compress the screenshot using sharp
     // Resize to max width while maintaining aspect ratio, convert to JPEG
@@ -140,7 +166,7 @@ export const toolHandlers = {
       content: [
         {
           type: 'text',
-          text: `Screenshot captured: ${screenshotPath}\nCompressed: ${originalSize.toLocaleString()} → ${compressedSize.toLocaleString()} bytes (${reduction}% reduction)`,
+          text: `Screenshot captured${device ? ` on ${device}` : ''}: ${screenshotPath}\nCompressed: ${originalSize.toLocaleString()} → ${compressedSize.toLocaleString()} bytes (${reduction}% reduction)`,
         },
         {
           type: 'image',
@@ -152,36 +178,37 @@ export const toolHandlers = {
   },
 
   capture_ui_dump: async (args: any) => {
-    const content = await captureUIContent(true);
+    const { device } = args as { device?: string };
+    const content = await captureUIContent(true, device);
     return {
       content: content,
     };
   },
 
   input_keyevent: async (args: any) => {
-    const { key } = args as { key: string };
-    
+    const { key, device } = args as { key: string; device?: string };
+
     const keyCodeMap = {
       BACK: '4',
       HOME: '3',
       ENTER: '66',
       DELETE: '67',
     };
-    
+
     const keyCode = keyCodeMap[key as keyof typeof keyCodeMap];
     if (!keyCode) {
       throw new McpError(ErrorCode.InvalidParams, `Invalid key: ${key}`);
     }
-    
-    await executeCommand(`adb shell input keyevent ${keyCode}`);
-    
-    const uiContent = await captureUIContent(false);
-    
+
+    await executeCommand(`adb shell input keyevent ${keyCode}`, device);
+
+    const uiContent = await captureUIContent(false, device);
+
     return {
       content: [
         {
           type: 'text',
-          text: `Key event sent: ${key} (${keyCode})`,
+          text: `Key event sent: ${key} (${keyCode})${device ? ` on ${device}` : ''}`,
         },
         ...uiContent,
       ],
@@ -189,17 +216,17 @@ export const toolHandlers = {
   },
 
   input_tap: async (args: any) => {
-    const { x, y } = args as { x: number; y: number };
-    
-    await executeCommand(`adb shell input tap ${x} ${y}`);
-    
-    const uiContent = await captureUIContent(false);
-    
+    const { x, y, device } = args as { x: number; y: number; device?: string };
+
+    await executeCommand(`adb shell input tap ${x} ${y}`, device);
+
+    const uiContent = await captureUIContent(false, device);
+
     return {
       content: [
         {
           type: 'text',
-          text: `Tap executed at coordinates: (${x}, ${y})`,
+          text: `Tap executed at coordinates: (${x}, ${y})${device ? ` on ${device}` : ''}`,
         },
         ...uiContent,
       ],
@@ -207,20 +234,20 @@ export const toolHandlers = {
   },
 
   input_text: async (args: any) => {
-    const { text } = args as { text: string };
+    const { text, device } = args as { text: string; device?: string };
     const escapedText = text.replace(/"/g, '\\"');
-    
-    await executeCommand(`adb shell input text "${escapedText}"`);
 
-    await executeCommand(`adb shell input keyevent 66`);
-    
-    const uiContent = await captureUIContent(false);
-    
+    await executeCommand(`adb shell input text "${escapedText}"`, device);
+
+    await executeCommand(`adb shell input keyevent 66`, device);
+
+    const uiContent = await captureUIContent(false, device);
+
     return {
       content: [
         {
           type: 'text',
-          text: `Text input: ${text}`,
+          text: `Text input: ${text}${device ? ` on ${device}` : ''}`,
         },
         ...uiContent,
       ],
@@ -228,29 +255,29 @@ export const toolHandlers = {
   },
 
   input_scroll: async (args: any) => {
-    const { direction } = args as { direction: string };
-    
+    const { direction, device } = args as { direction: string; device?: string };
+
     const scrollCommands = {
       up: 'adb shell input swipe 500 800 500 400',
       down: 'adb shell input swipe 500 400 500 800',
       left: 'adb shell input swipe 800 500 400 500',
       right: 'adb shell input swipe 400 500 800 500',
     };
-    
+
     const command = scrollCommands[direction as keyof typeof scrollCommands];
     if (!command) {
       throw new McpError(ErrorCode.InvalidParams, `Invalid direction: ${direction}`);
     }
-    
-    await executeCommand(command);
-    
-    const uiContent = await captureUIContent(false);
-    
+
+    await executeCommand(command, device);
+
+    const uiContent = await captureUIContent(false, device);
+
     return {
       content: [
         {
           type: 'text',
-          text: `Scroll executed: ${direction}`,
+          text: `Scroll executed: ${direction}${device ? ` on ${device}` : ''}`,
         },
         ...uiContent,
       ],
