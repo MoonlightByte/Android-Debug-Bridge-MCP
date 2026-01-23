@@ -98,13 +98,14 @@ export async function getConnectedDevices(): Promise<string[]> {
   }
 }
 
-export async function executeCommand(command: string): Promise<string> {
+export async function executeCommand(command: string, device?: string): Promise<string> {
   const platform = os.platform();
   let adjustedCommand = command;
 
   // Replace 'adb ' with full ADB command including device flag
   if (adjustedCommand.startsWith('adb ')) {
-    adjustedCommand = adjustedCommand.replace(/^adb /, `${getAdbCommand()} `);
+    const adbCmd = device ? `${getAdbPath()} -s ${device}` : getAdbCommand();
+    adjustedCommand = adjustedCommand.replace(/^adb /, `${adbCmd} `);
   }
 
   if (platform === 'win32') {
@@ -131,7 +132,7 @@ export async function executeCommand(command: string): Promise<string> {
       const devices = await getConnectedDevices();
       throw new Error(
         `Multiple devices connected: ${devices.join(', ')}. ` +
-        `Set ANDROID_SERIAL environment variable to specify which device to use.`
+        `Specify a device using the 'device' parameter.`
       );
     }
     if (error.message?.includes('no devices')) {

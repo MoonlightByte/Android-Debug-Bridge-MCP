@@ -128,12 +128,13 @@ async function getConnectedDevices() {
         return [];
     }
 }
-async function executeCommand(command) {
+async function executeCommand(command, device) {
     const platform = os.platform();
     let adjustedCommand = command;
     // Replace 'adb ' with full ADB command including device flag
     if (adjustedCommand.startsWith('adb ')) {
-        adjustedCommand = adjustedCommand.replace(/^adb /, `${getAdbCommand()} `);
+        const adbCmd = device ? `${getAdbPath()} -s ${device}` : getAdbCommand();
+        adjustedCommand = adjustedCommand.replace(/^adb /, `${adbCmd} `);
     }
     if (platform === 'win32') {
         // For Windows, handle specific commands that might differ
@@ -158,7 +159,7 @@ async function executeCommand(command) {
         if (error.message?.includes('more than one device')) {
             const devices = await getConnectedDevices();
             throw new Error(`Multiple devices connected: ${devices.join(', ')}. ` +
-                `Set ANDROID_SERIAL environment variable to specify which device to use.`);
+                `Specify a device using the 'device' parameter.`);
         }
         if (error.message?.includes('no devices')) {
             throw new Error('No Android devices connected. Start an emulator or connect a device via USB.');
