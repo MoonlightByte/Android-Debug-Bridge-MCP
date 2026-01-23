@@ -95,7 +95,25 @@ The following environment variables can be used to configure device selection:
 
 ### Multi-Device Support
 
-When multiple Android devices/emulators are connected, the MCP server handles device selection as follows:
+When multiple Android devices/emulators are connected, you have two options:
+
+#### Option 1: Use the `device` parameter (Recommended)
+
+All ADB tools support an optional `device` parameter to target a specific device:
+
+```
+# First, list available devices
+list_devices
+
+# Then use the device parameter with any tool
+capture_screenshot(test_name="test", step_name="001", device="emulator-5556")
+input_tap(x=540, y=1050, device="emulator-5554")
+open_app(package_name="com.example.app", device="emulator-5554")
+```
+
+If `device` is not specified and multiple devices are connected, an error will be returned listing available devices.
+
+#### Option 2: Use environment variables
 
 1. **Single device**: Automatically detected and used (no configuration needed)
 2. **Multiple devices**: Set `ANDROID_SERIAL` environment variable to specify which device to use
